@@ -33,20 +33,11 @@ library(reticulate)
 # library(kableExtra)
 
 # Setup python environment using conda
-# Original conda config, which gives bunnies (from the gentle introduction that worked)
-# conda_list()[[1]] %>% use_condaenv()
-# Can I get the second envronment, r-environment, to work
-# conda_list()[[1]][[2]] %>% use_condaenv()
-# This is from the article used for this exercise, which uses the stated environment
 use_python("/anaconda3/bin/python")
-#use_condaenv("/anaconda3/bin/python3")
-# Use py_install() to load pandas, seaborn, and sklearn, which made a virtual environment
-# use_virtualenv("~/.virtualenvs/r-reticulate")
 py_config()
 
 # Load external R scripts here
 # How to embed in R Markdown: < https://yihui.name/knitr/demo/externalization/ >
-# knitr::read_chunk('../functions/grepl_pattern2institution.R')
 # knitr::read_chunk('../functions/kable_smalldf_left.R')
 ```
 
@@ -59,17 +50,6 @@ py_config()
 
 #### Input File Names
 input_file      <- "data/Dispatchers_Background_Data.xls"
-
-#### Output File Names
-# Uncomment next 4 lines for output (select lines and Shift-Ctrl-C) 
-# output_filename <- "output/garbage_out"
-# output_file_ext <- ".csv"
-# output_file     <- paste0(output_filename,output_file_ext)
-# metadata_file    <- paste0(output_filename,".txt")
-
-# code_file       <- "data/codes/diagnosis_codes.csv"
-#pathname        <- "/Users/USERNAME/" # Mac OS X format
-# Note that 'doc_title' is set in the title section of the YAML header
 
 ### Data Input
 data <- readxl::read_xls(input_file)
