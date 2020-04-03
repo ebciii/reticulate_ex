@@ -1,0 +1,294 @@
+---
+title: "`r (doc_title <- 'reticulate - Using R for Data Wrangling and Python for Predictive Analytics')`"
+author: " `r ifelse(grepl('ebciii3', getwd()), 'E Bryan Crenshaw III', 'AudGenDB Team')` "
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    theme: spacelab
+    highlight: default
+    toc: TRUE
+    toc_depth: 5
+    toc_float: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# In AudGenDB, the default organization is for .Rmd files to reside in the 'rmarkdown' subfolder
+# The following command finds the project directory it no matter where the Rmd file is located 
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+### Objective ### 
+Introductory exercise in which R is used for data preprocessing, and Python is used in `reticulate` to train a Support Vector Machine for a simple classification task.
+
+### Approach ### 
+Follow instructions in [R and Python: Using reticulate to get the best of both worlds](https://www.statworx.com/de/blog/r-and-python-using-reticulate-to-get-the-best-of-both-worlds/). After running into a problem, reach out to the author, [Manuel Tilgner](https://www.linkedin.com/in/manuel-tilgner-93616b101/?msgConversationId=6651730593560178688&msgOverlay=true), on LinkedIn for help.
+
+```{r LoadLibraries}
+#Load libraries in this first chunk
+library(tidyverse)
+library(recipes)
+library(reticulate)
+# library(knitr)
+# library(kableExtra)
+
+# Setup python environment using conda
+# Original conda config, which gives bunnies (from the gentle introduction that worked)
+# conda_list()[[1]] %>% use_condaenv()
+# Can I get the second envronment, r-environment, to work
+# conda_list()[[1]][[2]] %>% use_condaenv()
+# This is from the article used for this exercise, which uses the stated environment
+use_python("/anaconda3/bin/python")
+#use_condaenv("/anaconda3/bin/python3")
+# Use py_install() to load pandas, seaborn, and sklearn, which made a virtual environment
+# use_virtualenv("~/.virtualenvs/r-reticulate")
+py_config()
+
+# Load external R scripts here
+# How to embed in R Markdown: < https://yihui.name/knitr/demo/externalization/ >
+# knitr::read_chunk('../functions/grepl_pattern2institution.R')
+# knitr::read_chunk('../functions/kable_smalldf_left.R')
+```
+
+```{r kable_smalldf_left, echo=FALSE}
+# This function makes it easy to add well formatted small tables that float left on the R Markdown page
+```
+
+```{r LoadData, cache=FALSE}
+#Load data in this chunk
+
+#### Input File Names
+input_file      <- "data/Dispatchers_Background_Data.xls"
+
+#### Output File Names
+# Uncomment next 4 lines for output (select lines and Shift-Ctrl-C) 
+# output_filename <- "output/garbage_out"
+# output_file_ext <- ".csv"
+# output_file     <- paste0(output_filename,output_file_ext)
+# metadata_file    <- paste0(output_filename,".txt")
+
+# code_file       <- "data/codes/diagnosis_codes.csv"
+#pathname        <- "/Users/USERNAME/" # Mac OS X format
+# Note that 'doc_title' is set in the title section of the YAML header
+
+### Data Input
+data <- readxl::read_xls(input_file)
+ 
+```
+
+### Data Analysis ### 
+
+#### Data Transformation in `dplyr`
+
+Let’s read perform some transformations with dplyr. This is mostly recoding work. As you can see in the select command, we pick a handful of variables like sex, age, caffeine consumption, health and stress to predict whether a railroad dispatcher was diagnosed with a sleeping disorder.
+
+```{r PreprocessingData}
+# Data Processing
+sleep <- data %>%
+  select(
+      Diagnosed_Sleep_disorder, Age_Group, Sex, Total_years_dispatcher,
+      Total_years_present_job, Marital_Status, Childrendependents,
+      Children_under_2_yrs, Caff_Beverages, Sick_Days_in_last_year,
+      Health_status, Avg_Work_Hrs_Week, FRA_report, Phys_Drained,
+      Mentally_Drained, Alert_at_Work, Job_Security
+  ) %>%
+  rename_all(tolower) %>%
+  mutate_if(is.character, as.numeric) %>%
+  mutate_at(vars(diagnosed_sleep_disorder, sex, caff_beverages, fra_report),
+            ~ -(. - 2)) %>%
+  mutate_at(vars(marital_status), ~ (. - 1)) %>%
+  drop_na()
+```
+
+#### Prepare the Data
+
+Now that we have the variables we want, it’s time to get the data into the right shape. Here’s one more reason to love `R`: the `recipes` package. If you’re not familiar with it, check it out. You may find its workflow a bit peculiar at first, but once you get used to it, it makes data preparation a breeze.
+
+What we’re doing here is straightforward. First, we split the data into a training and test set. Next, we specify a data preparation recipe, which consists of three steps: one hot encoding factor predictors, standardising numeric predictors and down-sampling the data. One hot encoding and standardising ensure that the Support Vector Machine algorithm works properly. Down-sampling is a counter-measure against the class imbalance in our dataset.
+
+```{r PrepareData}
+numeric_variables <- c(
+  "total_years_dispatcher", "total_years_present_job",
+  "childrendependents", "children_under_2_yrs", 
+  "sick_days_in_last_year", "avg_work_hrs_week"
+)
+
+factor_variables <- setdiff(colnames(sleep), numeric_variables)
+
+sleep <- mutate_at(sleep, vars(factor_variables), as.factor)
+
+set.seed(2019)
+index <- sample(1:nrow(sleep), floor(nrow(sleep) * .75))
+
+sleep_train <- sleep[index, ]
+sleep_test <- sleep[-index, ]
+
+recipe_formula <- recipes::recipe(diagnosed_sleep_disorder ~ ., sleep_train)
+
+recipe_steps <- recipe_formula %>%
+  recipes::step_dummy(factor_variables, -all_outcomes(), one_hot = TRUE) %>%
+  recipes::step_downsample(diagnosed_sleep_disorder) %>%
+  recipes::step_center(numeric_variables) %>%
+  recipes::step_scale(numeric_variables)
+
+recipe_prep <- recipes::prep(recipe_steps, sleep_train, retain = TRUE)
+
+training_data <- juice(recipe_prep)
+testing_data <- bake(recipe_prep, sleep_test)
+```
+
+#### Machine Learning in Python
+
+Now comes the part where Python shines: its unified ML library scikit-learn. Let’s go ahead and import the Support Vector Machine (SVM) classifier as well as some other modules to tune and evaluate our model.
+
+SVM is a supervised learning algorithm. It works by finding a hyperplane in an N-dimensional space, which separates two (or more) classes as cleanly as possible. More technically, SVM maximizes the margin or the distance between the separating hyperplane and the closest data points. This is why SVM is also called a maximum margin estimator.
+
+SVM is mostly used for classification, but it can do regression too. The upside is that it works with high-dimensional data and different kernel functions, meaning it can flexibly adapt to different types of data. Its downside is that computation becomes costly with large datasets and that it reacts sensitively to hyperparameters. Still, for some applications SVM performs quite competitively.
+
+Combining SVM with kernels allows us to project our data into a higher-dimensional space. The point of this is to make the classes better separable. In our example here, we’ll use a simple linear and a radial basis function kernel. The latter can map the predictor space into infinite dimensions.
+
+```{python}
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from sklearn import svm
+from sklearn.model_selection import GridSearchCV, cross_val_score 
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+y_train = r.training_data['diagnosed_sleep_disorder']
+X_train = r.training_data.drop('diagnosed_sleep_disorder', axis = 1)
+
+y_test = r.testing_data['diagnosed_sleep_disorder']
+X_test = r.testing_data.drop('diagnosed_sleep_disorder', axis = 1)
+
+clf = svm.SVC(kernel = 'linear')
+clf.fit(X_train, y_train)
+y_pred = clf.predict(X_test)
+
+print(confusion_matrix(y_test, y_pred))
+print(classification_report(y_test, y_pred))
+
+clf = svm.SVC(kernel = 'rbf') # was originally 'RBF'
+clf.fit(X_train, y_train)
+y_pred = clf.predict(X_test)
+
+print(confusion_matrix(y_test, y_pred))
+print(classification_report(y_test, y_pred))
+
+```
+
+#### Tune the Model
+
+```{python,  eval=FALSE}
+param_grid = [{'C': [0.01, 0.1, 1, 10, 100],
+               'gamma': [0.001, 0.01, 0.1, 1, 10],
+               'kernel': ['rbf', 'linear']}] # RBF
+
+grid = GridSearchCV(svm.SVC(), param_grid, cv = 5, scoring = 'balanced_accuracy')
+
+grid.fit(X_train, y_train)
+
+print(grid.best_params_)
+
+```
+
+#### Evaluate the Accuracy of the Model
+
+In this case, we achieve a training set accuracy of 93 per cent and a test set accuracy of 74 per cent. This suggests that some overfitting has occurred. To achieve a higher accuracy (or better: sensitivity/recall), we could experiment with different kernels and/or hyperparameter values. But this I’d leave up to you. With reticulate, you now have a tool to get the best of both `R` and `Python`.
+
+```{python,  eval=FALSE}
+lf = grid.best_estimator_
+y_pred = clf.predict(X_test)
+
+print('Confusion Matrix:\n\n', confusion_matrix(y_test, y_pred))
+print('\nClassification Report:\n\n', classification_report(y_test, y_pred))
+print('\nTraining Set Accuracy: {:.2f}%'.format(clf.score(X_train, y_train)))
+print('\nTest Set Accuracy: {:.2f}%'.format(clf.score(X_test, y_test)))
+
+conf_mat = confusion_matrix(y_test, y_pred)
+
+sns.heatmap(conf_mat, square = True, annot = True, fmt = 'g',
+            cbar = False, cmap = 'viridis')
+plt.xlabel('predicted')
+plt.ylabel('observed')
+plt.show()
+
+```
+
+
+```{r OutputData, echo=FALSE}
+# Use this chunk to print output csv file and to generate a metadata file for the output:
+# To use following lines, select them, and uncomment with 'Ctrl'+'Shift'+'C' in RStudio
+
+# df_out <- DATA_FRAME_TO_OUTPUT_HERE
+# meta_comment <- c("ADD SHORT COMMENT FOR PURPOSE OF OUTPUT FILE")
+# 
+# yml_out <- list(
+#     Name = output_file,
+#     Source = doc_title,
+#     Input = input_file,
+#     Description = meta_comment,
+#     Date_Generated = format(Sys.time(), "%a %b %d, %Y  %X")
+# )
+# write_yaml(yml_out, file = metadata_file)
+# 
+# write.csv(df_out, file=output_file, row.names = FALSE)
+
+```
+
+### Conclusion ###   
+
+I've turned off the chunks that giving the error (e.g. "Tune the Model", "Evaluate the Accuracy of the Model", the latter of which fails because it doesn't get variables from the former), so that the Rmd report will render. 
+
+I am getting the following error in the chunk under the heading "Tune the model." The error is: 
+
+```
+Quitting from lines 185-195 (Reticulate_RdataWrangling_PythonPredictions.Rmd) 
+Error in py_call_impl(callable, dots$args, dots$keywords) : 
+  TypeError: object of type 'CategoricalDtype' has no len()
+
+Detailed traceback: 
+  File "<string>", line 1, in <module>
+  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_search.py", line 722, in fit
+    self._run_search(evaluate_candidates)
+  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_search.py", line 1191, in _run_search
+    evaluate_candidates(ParameterGrid(self.param_grid))
+  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_search.py", line 711, in evaluate_candidates
+    cv.split(X, y, groups)))
+  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_split.py", line 719, in split
+    y = check_array(y, ensure_2d=False, dtype=None)
+  File "/anaconda3/lib/python3.7/site-packages/sklearn/utils/validation.py", line 480, in check_array
+    if hasattr(array, "dtypes") and len(array.dtypes):
+Calls: <Anonymous> ... py_capture_output -> force -> <Anonymous> -> py_call_impl
+Execution halted
+```
+
+I've updated both conda and reticulate, and the problem persists. 
+
+<br /><br />
+<details>
+<summary>Click here for session info.</summary>
+
+```{r SessionInfo}
+# This session info field shows the environment when the R script was run
+# It will be hidden in documents, except for the summary above and a triangle
+# Clicking on the triangle/summary statement will reveal these data in the browser
+sessionInfo()
+py_config()
+print(paste0("This R Markdown Document was run on ",format(Sys.Date(),"%d-%b-%Y")))
+
+# If the user in not inside RStudio, then this will send a notification to the OS 
+# NOTE: Notifier was not on CRAN in March 2019
+# To get package: 
+#install.packages("devtools") if devtools is not installed
+#devtools::install_github("gaborcsardi/notifier")
+################################################
+require(notifier)
+msg <- paste0(doc_title, " is done!")
+notifier::notify(msg, title = "R notification", image = NULL)
+```
+
+</details>
+<br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br />

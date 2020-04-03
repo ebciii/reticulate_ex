@@ -1,0 +1,42 @@
+# R Hidden Files
+.Rproj.user
+.Rhistory
+.Ruserdata
+.RData
+.Rapp.history
+
+# R Visible Files
+*.RData
+*.Rproj alias
+*.Rproj
+
+# R cache files
+*.rdb
+*.rdx
+*_cache/*
+
+# Mac OS
+.DS_Store
+
+# Certain types of files
+*.pdf
+*.xlsx
+*.tiff
+*.pptx
+*.png
+*.orig
+*alias
+
+# Subfolders to exclude
+information
+output/arkiv/*
+papers/*
+resources/*
+documentation/*
+data/PHI/*
+data/*.RData
+rmarkdown/*_files/
+rmarkdown/*old.*
+scripts/*
+style/*
+tmp/*
