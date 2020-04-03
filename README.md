@@ -8,4 +8,4 @@ Follow instructions in [R and Python: Using reticulate to get the best of both w
 
 ### R Markdown Report
 
-My efforts thus far are summarizes in the RMarkdown Report, entitled [reticulate - Using R for Data Wrangling and Python for A Clasification Task](html/Reticulate_RdataWrangling_PythonPredictions.html)
+My efforts thus far are summarized in the RMarkdown Report, entitled [reticulate - Using R for Data Wrangling and Python for A Clasification Task](html/Reticulate_RdataWrangling_PythonPredictions.html)
