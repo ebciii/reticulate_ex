@@ -1,5 +1,5 @@
 ---
-title: "`r (doc_title <- 'reticulate - Using R for Data Wrangling and Python for Classification')`"
+title: "`r (doc_title <- 'reticulate - Using R for Data Wrangling and Python for A Classification Task')`"
 author: " Manuel Tilgner (author), E Bryan Crenshaw III (implemented here) "
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: 
@@ -10,50 +10,64 @@ output:
     toc_depth: 5
     toc_float: TRUE
 ---
-
+<style>
+div.blue { background-color:#e6f0ff; 
+			border-radius: 5px; 
+			padding: 8px 20px 8px 20px; 
+			color: black}
+table caption {font-weight: bold;
+               color: #444;
+               font-size: 1.5em;}
+</style>
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 # In AudGenDB, the default organization is for .Rmd files to reside in the 'rmarkdown' subfolder
 # The following command finds the project directory it no matter where the Rmd file is located 
-knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+# knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+
+# Note: To get the plt.show() to work in the last python chunk, the above opts_knit() statement routinely used by the AudGenDB template had to be commented out. When this occurred, the paths of the data input had to be changed, because the rmarkdown folder was the working directory, instead of the rootdir (as specified above).
 ```
 
 ### Objective ### 
-Introductory exercise in which R is used for data preprocessing, and Python is used in `reticulate` to train a Support Vector Machine for a simple classification task.
+Introductory exercise in which R is used for data preprocessing, and Python is used in `reticulate` to train a Support Vector Machine for a simple classification task.  
+
+### Introduction
+This is a worked example of the tutorial, [R and Python: Using reticulate to get the best of both worlds](https://www.statworx.com/de/blog/r-and-python-using-reticulate-to-get-the-best-of-both-worlds/). Although only a year old at the time this example was rerun, there have been numerous changes that needed to be addressed to get the example to run without error or warnings. These changes were outlined in the Conclusion section at the end of this R Markdown report. The text in the "Data Analysis" section and the first part of the "Conclusions" is from the original post. Tweeks made to the code are flagged with comment (### Updated script), and summarized at end of Conclusions.  
 
 ### Approach ### 
-Follow instructions in [R and Python: Using reticulate to get the best of both worlds](https://www.statworx.com/de/blog/r-and-python-using-reticulate-to-get-the-best-of-both-worlds/). After running into a problem, reach out to the author, [Manuel Tilgner](https://www.linkedin.com/in/manuel-tilgner-93616b101/?msgConversationId=6651730593560178688&msgOverlay=true), on LinkedIn for help.
+Follow instructions in [R and Python: Using reticulate to get the best of both worlds](https://www.statworx.com/de/blog/r-and-python-using-reticulate-to-get-the-best-of-both-worlds/). Several issues were addressed, as outlined in the Conclusions section.
 
 ```{r LoadLibraries}
 #Load libraries in this first chunk
 library(tidyverse)
 library(recipes)
 library(reticulate)
-# library(knitr)
-# library(kableExtra)
 
 # Setup python environment using conda
-use_python("/anaconda3/bin/python")
+use_condaenv("/anaconda3/bin/python3")
 py_config()
 
 # Load external R scripts here
 # How to embed in R Markdown: < https://yihui.name/knitr/demo/externalization/ >
-# knitr::read_chunk('../functions/kable_smalldf_left.R')
-```
-
-```{r kable_smalldf_left, echo=FALSE}
-# This function makes it easy to add well formatted small tables that float left on the R Markdown page
+knitr::read_chunk('../scripts/yaml_metadata.R')
 ```
 
 ```{r LoadData, cache=FALSE}
 #Load data in this chunk
 
 #### Input File Names
-input_file      <- "data/Dispatchers_Background_Data.xls"
+input_file      <- "../data/Dispatchers_Background_Data.xls"
+metadata_yml    <- '../data/Dispatchers_Background_Data.yml'
 
 ### Data Input
 data <- readxl::read_xls(input_file)
  
+```
+
+### Input Metadata
+
+```{r yaml_metadata, echo=FALSE}
+
 ```
 
 ### Data Analysis ### 
@@ -137,20 +151,23 @@ from sklearn import svm
 from sklearn.model_selection import GridSearchCV, cross_val_score 
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-y_train = r.training_data['diagnosed_sleep_disorder']
-X_train = r.training_data.drop('diagnosed_sleep_disorder', axis = 1)
+### Updated script
+y_train = np.array(r.training_data['diagnosed_sleep_disorder'])
+X_train = np.array(r.training_data.drop('diagnosed_sleep_disorder', axis = 1))
 
-y_test = r.testing_data['diagnosed_sleep_disorder']
-X_test = r.testing_data.drop('diagnosed_sleep_disorder', axis = 1)
+y_test = np.array(r.testing_data['diagnosed_sleep_disorder'])
+X_test = np.array(r.testing_data.drop('diagnosed_sleep_disorder', axis = 1))
+###^^^----Updated script
 
-clf = svm.SVC(kernel = 'linear')
+clf = svm.SVC(kernel = 'linear', gamma='scale')
 clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 
 print(confusion_matrix(y_test, y_pred))
 print(classification_report(y_test, y_pred))
 
-clf = svm.SVC(kernel = 'rbf') # was originally 'RBF'
+### Updated script
+clf = svm.SVC(kernel = 'rbf', gamma='scale') # was originally 'RBF'
 clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 
@@ -161,12 +178,14 @@ print(classification_report(y_test, y_pred))
 
 #### Tune the Model
 
-```{python,  eval=FALSE}
+```{python}
+### Updated script
 param_grid = [{'C': [0.01, 0.1, 1, 10, 100],
                'gamma': [0.001, 0.01, 0.1, 1, 10],
                'kernel': ['rbf', 'linear']}] # RBF
 
-grid = GridSearchCV(svm.SVC(), param_grid, cv = 5, scoring = 'balanced_accuracy')
+### Updated script
+grid = GridSearchCV(svm.SVC(), param_grid, cv = 5, scoring = 'balanced_accuracy', iid=True)
 
 grid.fit(X_train, y_train)
 
@@ -176,9 +195,7 @@ print(grid.best_params_)
 
 #### Evaluate the Accuracy of the Model
 
-In this case, we achieve a training set accuracy of 93 per cent and a test set accuracy of 74 per cent. This suggests that some overfitting has occurred. To achieve a higher accuracy (or better: sensitivity/recall), we could experiment with different kernels and/or hyperparameter values. But this I’d leave up to you. With reticulate, you now have a tool to get the best of both `R` and `Python`.
-
-```{python,  eval=FALSE}
+```{python}
 lf = grid.best_estimator_
 y_pred = clf.predict(X_test)
 
@@ -187,6 +204,10 @@ print('\nClassification Report:\n\n', classification_report(y_test, y_pred))
 print('\nTraining Set Accuracy: {:.2f}%'.format(clf.score(X_train, y_train)))
 print('\nTest Set Accuracy: {:.2f}%'.format(clf.score(X_test, y_test)))
 
+```
+
+```{python}
+# This chunk has been left unevaluated, because RMarkdown can't find the .png output
 conf_mat = confusion_matrix(y_test, y_pred)
 
 sns.heatmap(conf_mat, square = True, annot = True, fmt = 'g',
@@ -194,58 +215,19 @@ sns.heatmap(conf_mat, square = True, annot = True, fmt = 'g',
 plt.xlabel('predicted')
 plt.ylabel('observed')
 plt.show()
-
-```
-
-
-```{r OutputData, echo=FALSE}
-# Use this chunk to print output csv file and to generate a metadata file for the output:
-# To use following lines, select them, and uncomment with 'Ctrl'+'Shift'+'C' in RStudio
-
-# df_out <- DATA_FRAME_TO_OUTPUT_HERE
-# meta_comment <- c("ADD SHORT COMMENT FOR PURPOSE OF OUTPUT FILE")
-# 
-# yml_out <- list(
-#     Name = output_file,
-#     Source = doc_title,
-#     Input = input_file,
-#     Description = meta_comment,
-#     Date_Generated = format(Sys.time(), "%a %b %d, %Y  %X")
-# )
-# write_yaml(yml_out, file = metadata_file)
-# 
-# write.csv(df_out, file=output_file, row.names = FALSE)
-
 ```
 
 ### Conclusion ###   
+<div class = "blue">
+#### Original Conclusions
+In this case, we achieve a training set accuracy of 93 per cent and a test set accuracy of 74 per cent. This suggests that some overfitting has occurred. To achieve a higher accuracy (or better: sensitivity/recall), we could experiment with different kernels and/or hyperparameter values. But this I’d leave up to you. With reticulate, you now have a tool to get the best of both `R` and `Python`.
 
-I've turned off the chunks that giving the error (e.g. "Tune the Model", "Evaluate the Accuracy of the Model", the latter of which fails because it doesn't get variables from the former), so that the Rmd report will render. 
-
-I am getting the following error in the chunk under the heading "Tune the model." The error is: 
-
-```
-Quitting from lines 185-195 (Reticulate_RdataWrangling_PythonPredictions.Rmd) 
-Error in py_call_impl(callable, dots$args, dots$keywords) : 
-  TypeError: object of type 'CategoricalDtype' has no len()
-
-Detailed traceback: 
-  File "<string>", line 1, in <module>
-  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_search.py", line 722, in fit
-    self._run_search(evaluate_candidates)
-  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_search.py", line 1191, in _run_search
-    evaluate_candidates(ParameterGrid(self.param_grid))
-  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_search.py", line 711, in evaluate_candidates
-    cv.split(X, y, groups)))
-  File "/anaconda3/lib/python3.7/site-packages/sklearn/model_selection/_split.py", line 719, in split
-    y = check_array(y, ensure_2d=False, dtype=None)
-  File "/anaconda3/lib/python3.7/site-packages/sklearn/utils/validation.py", line 480, in check_array
-    if hasattr(array, "dtypes") and len(array.dtypes):
-Calls: <Anonymous> ... py_capture_output -> force -> <Anonymous> -> py_call_impl
-Execution halted
-```
-
-I've updated both conda and reticulate, and the problem persists. 
+#### Updates Needed
+Several tweeks were made to this tutorial to get it to run without errors or warnings:  
+- The test and training data needed to be explicitly converted to np.array (e.g., y_train = np.array(...)) to avoid an error.  
+- 'RBF' had to be changed to 'rbf' to avoid an error, and `gamma` needed to made explicit to address warnings (e.g, `svm.SVC(kernel = 'rbf', gamma='scale')`).  
+- To the `grid` assignment in "Tune the model," `, iid=True` had to be added to address warnings about changes in the versions.   
+</div>
 
 <br /><br />
 <details>
