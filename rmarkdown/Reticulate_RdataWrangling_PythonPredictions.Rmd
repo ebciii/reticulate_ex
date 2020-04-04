@@ -1,6 +1,6 @@
 ---
-title: "`r (doc_title <- 'reticulate - Using R for Data Wrangling and Python for Predictive Analytics')`"
-author: " `r ifelse(grepl('ebciii3', getwd()), 'E Bryan Crenshaw III', 'AudGenDB Team')` "
+title: "`r (doc_title <- 'reticulate - Using R for Data Wrangling and Python for Classification')`"
+author: " Manuel Tilgner (author), E Bryan Crenshaw III (implemented here) "
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: 
   html_document:
